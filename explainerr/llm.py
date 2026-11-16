@@ -29,24 +29,35 @@ class _NoRedirect(HTTPRedirectHandler):
         raise HTTPError(req.full_url, code, "不接受 API 重定向", headers, fp)
 
 
+def api_setting(env: Mapping[str, str], name: str, alias: str, default: str = "") -> str:
+    """保留简写变量兼容性；同时设置时 OPENAI_* 优先。"""
+    return env.get(name, env.get(alias, default)).strip()
+
+
 def is_enabled(env: Mapping[str, str]) -> bool:
     return env.get("EXPLAINERR_USE_LLM", "").strip() == "1" and bool(
-        env.get("OPENAI_API_KEY", "").strip()
+        api_setting(env, "OPENAI_API_KEY", "API_KEY")
     )
 
 
-def explain_llm(error: str, context: Mapping[str, str], env: Mapping[str, str]) -> Explanation:
-    base_url = env.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+def validate_base_url(value: str) -> str:
+    base_url = value.strip().rstrip("/")
     parsed = urlsplit(base_url)
     if (parsed.scheme not in {"https", "http"} or not parsed.hostname
             or parsed.username is not None or parsed.password is not None
-            or parsed.query or parsed.fragment):
-        raise ValueError("OPENAI_BASE_URL 必须是无认证信息、查询参数和片段的 HTTP(S) URL")
+            or parsed.query or parsed.fragment or any(char.isspace() for char in base_url)):
+        raise ValueError("API 根地址必须是无认证信息、查询参数和片段的 HTTP(S) URL")
+    parsed.port  # 校验非法端口；异常内容不会输出到终端。
+    return base_url
+
+
+def explain_llm(error: str, context: Mapping[str, str], env: Mapping[str, str]) -> Explanation:
+    base_url = validate_base_url(api_setting(env, "OPENAI_BASE_URL", "BASE_URL", "https://api.openai.com/v1"))
     timeout = float(env.get("EXPLAINERR_TIMEOUT", "15"))
     if not math.isfinite(timeout) or not 0 < timeout <= 60:
         raise ValueError("EXPLAINERR_TIMEOUT 必须大于 0 且不超过 60 秒")
     payload = {
-        "model": env.get("OPENAI_MODEL", "gpt-4o-mini").strip(),
+        "model": api_setting(env, "OPENAI_MODEL", "MODEL", "gpt-4o-mini"),
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps(
@@ -57,7 +68,7 @@ def explain_llm(error: str, context: Mapping[str, str], env: Mapping[str, str]) 
     request = Request(
         base_url + "/chat/completions",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Authorization": "Bearer " + env["OPENAI_API_KEY"].strip(),
+        headers={"Authorization": "Bearer " + api_setting(env, "OPENAI_API_KEY", "API_KEY"),
                  "Content-Type": "application/json", "Accept": "application/json"},
         method="POST",
     )
