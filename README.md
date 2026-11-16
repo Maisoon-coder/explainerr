@@ -8,6 +8,43 @@
 
 ![explainerr 运行截图：解释命令缺失和端口占用报错，并给出下一步检查建议](docs/images/cli-demo.png)
 
+## 常用命令速查
+
+首次使用先完成下方的[安装](#安装)。以下命令在项目根目录运行，`python` 使用已安装依赖的环境；安装 CLI 后，也可以把 `python -m explainerr` 简写为 `explainerr`。
+
+| 想做什么 | 命令 |
+| --- | --- |
+| 直接解释报错 | `python -m explainerr "npm ERR! missing script: dev"` |
+| 强制使用本地规则，不请求 API | `python -m explainerr --local "bash: foo: command not found"` |
+| 带上当前目录的项目上下文 | `python -m explainerr --context "ModuleNotFoundError: No module named 'requests'"` |
+| 通过管道传入报错 | `echo "EADDRINUSE: address already in use :::3000" \| python -m explainerr` |
+| 读取日志文件（PowerShell） | `Get-Content -Raw error.log \| python -m explainerr` |
+| 读取日志文件（macOS / Linux） | `cat error.log \| python -m explainerr` |
+| 查看已保存的模型配置，密钥脱敏 | `python -m explainerr profile list` |
+| 本次使用指定配置 | `python -m explainerr --profile deepseek "npm ERR! missing script: dev"` |
+| 指定配置并附带项目上下文 | `python -m explainerr --profile deepseek --context "npm ERR! missing script: dev"` |
+| 设置或切换默认配置 | `python -m explainerr profile default deepseek` |
+| 删除配置；若为默认配置，一并清除默认选择 | `python -m explainerr profile remove deepseek` |
+| 查看全部解释选项 | `python -m explainerr --help` |
+| 查看 Profile 管理命令 | `python -m explainerr profile --help` |
+| 查看添加配置的参数 | `python -m explainerr profile add --help` |
+| 查看版本 | `python -m explainerr --version` |
+| 运行测试（需安装开发依赖） | `python -m pytest` |
+
+**添加或更新模型配置：** 将密钥占位文字替换为自己的密钥；使用同一别名再次执行即可更新。
+
+```sh
+python -m explainerr profile add deepseek --api-key "替换为你的API密钥" --base-url https://api.deepseek.com --model deepseek-flash
+```
+
+**切换方式：** 把上表中的 `deepseek` 换成 `profile list` 中已有的别名。`--profile` 只影响本次运行；`profile default` 会保存默认选择；两者都不需要设置 `EXPLAINERR_USE_LLM=1`。
+
+**选择顺序：** `--profile` → 已启用的环境变量 → 默认 Profile → 本地规则。设置了默认 Profile 后，`EXPLAINERR_USE_LLM=0` 不会取消默认选择；完全离线请使用 `--local`，它不能与 `--profile` 同时使用。
+
+**配置位置：** `~/.explainerr/config.json`。示例只含占位密钥，不要把真实密钥或个人配置提交到 GitHub。
+
+更多说明：[Profile 存档](#模型配置存档profile) · [环境变量配置](#可选-llm-模式) · [服务商地址和模型对照表](#切换到其他模型服务)。
+
 ## 安装
 
 在项目根目录执行：
