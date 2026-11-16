@@ -148,6 +148,69 @@ explainerr --context "npm ERR! missing script: dev"
 
 启用 LLM 时，报错文本会发送给配置的 API 服务；同时使用 `--context` 时，截断后的白名单文件内容也会发送。程序不自动脱敏这些文本，传入前应检查其中是否包含密钥。本地模式无需网络。程序不加载 `.env`，环境变量需要由终端或调用方设置。
 
+### 切换到其他模型服务
+
+`explainerr` 已在 `llm.py` 中通过标准库 `urllib` 实现 OpenAI 兼容接口调用。切换服务商时，直接设置环境变量即可，无需修改代码或安装 `openai` SDK。
+
+需要配置以下四项：
+
+1. `OPENAI_API_KEY`：目标服务商提供的 API key。
+2. `OPENAI_BASE_URL`：该服务商的 OpenAI 兼容 API 根地址。
+3. `OPENAI_MODEL`：该服务商支持、且你的账户有权调用的模型名。
+4. `EXPLAINERR_USE_LLM=1`：启用 LLM 模式。
+
+无论使用哪家服务，变量名都保持为 `OPENAI_API_KEY`，只替换它的值。例如接入 DeepSeek 时，这里填写 DeepSeek 的密钥。程序不会自动读取 `DEEPSEEK_API_KEY`、`MOONSHOT_API_KEY` 或 `DASHSCOPE_API_KEY`，也不要把密钥写进 `llm.py`。
+
+以下配置示例于 **2026-11-16** 根据官方文档核对，未逐家进行真实 API 调用。模型名、地域地址和账户权限可能变化，使用时以对应平台控制台及文档为准。
+
+| 服务商 | `OPENAI_BASE_URL` | `OPENAI_MODEL` 示例 | 官方文档 |
+| --- | --- | --- | --- |
+| DeepSeek | `https://api.deepseek.com` | `deepseek-flash` | [首次 API 调用](https://api-docs.deepseek.com/) |
+| Kimi（月之暗面） | `https://api.moonshot.cn/v1` | `kimi-k3.1-pro` | [快速开始](https://platform.kimi.com/docs/get-api-key) |
+| 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-5.3` | [OpenAI API 兼容](https://docs.bigmodel.cn/cn/guide/develop/openai/introduction) |
+| 通义千问（阿里云百炼，北京地域） | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` | [模型调用示例](https://help.aliyun.com/en/model-studio/model-calling-in-sub-workspace) |
+| MiniMax（国内平台） | `https://api.minimax.cn/v1` | `MiniMax-M3.1-Flash` | [OpenAI 兼容接口](https://platform.minimax.cn/docs/api-reference/text-openai-api) |
+
+`OPENAI_BASE_URL` 填写表中的根地址即可，程序会自动追加 `/chat/completions`。API key、地址和模型名需要对应同一家服务及其适用地域；如果控制台提供工作空间专属地址，使用该地址。
+
+#### 示例：接入 DeepSeek
+
+在运行 `explainerr` 的同一个终端中设置变量。将占位文字替换为你自己的 API key。
+
+Windows PowerShell：
+
+```powershell
+$env:OPENAI_API_KEY = "你的 DeepSeek API key"
+$env:OPENAI_BASE_URL = "https://api.deepseek.com"
+$env:OPENAI_MODEL = "deepseek-flash"
+$env:EXPLAINERR_USE_LLM = "1"
+
+python -m explainerr "npm ERR! missing script: dev"
+```
+
+macOS / Linux：
+
+```sh
+export OPENAI_API_KEY="你的 DeepSeek API key"
+export OPENAI_BASE_URL="https://api.deepseek.com"
+export OPENAI_MODEL="deepseek-flash"
+export EXPLAINERR_USE_LLM=1
+
+python -m explainerr "npm ERR! missing script: dev"
+```
+
+如果已设置服务商自己的密钥变量，可以将其值赋给程序读取的变量，例如 PowerShell 中使用 `$env:OPENAI_API_KEY = $env:DEEPSEEK_API_KEY`，或在 macOS / Linux 中使用 `export OPENAI_API_KEY="$DEEPSEEK_API_KEY"`。
+
+改用其他服务时，替换上述示例中的密钥、根地址和模型名即可。配置默认只对当前终端及其启动的进程生效。
+
+#### 检查配置与切回本地模式
+
+如果看到“LLM 调用失败，已回退到本地规则模式”，依次检查 API key 是否有效、地址是否重复包含 `/chat/completions`、模型是否可用，以及账户额度和网络连接。仍然输出解释不代表 API 调用成功，因为本地规则会自动接管。
+
+响应较慢时，可将 `EXPLAINERR_TIMEOUT` 调整为 `60`；超过超时或响应大小限制仍会回退。当前客户端仅发送 `model` 和 `messages`，服务返回的 `choices[0].message.content` 需要包含符合要求的 JSON 解释。必须额外传入专属参数的服务，需要先扩展客户端，不能仅靠这些环境变量配置。
+
+需要恢复本地规则模式时，在 PowerShell 中执行 `$env:EXPLAINERR_USE_LLM = "0"`，或在 macOS / Linux 中执行 `export EXPLAINERR_USE_LLM=0`。其他配置可以保留，此时不会发送 API 请求。
+
 ## 验证
 
 安装开发依赖并激活虚拟环境后执行：
